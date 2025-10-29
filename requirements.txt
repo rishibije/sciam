@@ -6,4 +6,4 @@ numpy
 scikit-learn
 pandas
 matplotlib
-pymsql
+pymysql
