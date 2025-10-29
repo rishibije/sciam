@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SCIAM - Session {{ session_id }}</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs/loader.js"></script>
+  
+  <style>
+    /* [Keep all your existing CSS styles exactly as they are] */
+    /* Your current CSS is perfect, no changes needed */
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --accent: #3b82f6;
+      --success: #10b981;
+      --error: #ef4444;
+      --chat-bg: #0b1220;
+      --chat-bubble-me: #2563eb;
+      --chat-bubble-other: #374151;
+      --warning: #f59e0b;
+    }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  .topbar { display: flex; justify-content: space-between; padding: 10px 16px; background: #111827; border-bottom: 1px solid #2a3342; align-items: center; }
+    .brand { display: flex; gap: 10px; align-items: center; }
+    .session-code { background: #1f2937; padding: 4px 8px; border-radius: 6px; font-family: monospace; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .writer-dot { width: 10px; height: 10px; border-radius: 50%; background: #10b981; display: none; }
+  .container { display: flex; height: calc(100vh - 50px); }
+  .container.nav-collapsed .nav-left { display: none; }
+  .container.nav-collapsed .left { flex: 1; }
+  .nav-left { width: 260px; background: #0b1220; border-right: 1px solid #2a3342; display: flex; flex-direction: column; }
+  .nav-left .section { padding: 12px; border-bottom: 1px solid #2a3342; }
+  .nav-left h4 { margin: 0 0 8px 0; }
+  .left { flex: 1; display: flex; flex-direction: column; }
+  .work-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .top-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 150px; }
+  .bottom-pane { flex: 0 0 auto; display: flex; flex-direction: column; height: 35vh; min-height: 120px; }
+  .divider { height: 6px; background: #0b1220; border-top: 1px solid #2a3342; border-bottom: 1px solid #2a3342; cursor: ns-resize; }
+  /* File tabs bar */
+  .file-tabs { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #0b1220; border-bottom: 1px solid #2a3342; overflow-x: auto; }
+  .file-tab { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; background: #1f2937; color: var(--text); border: 1px solid #2a3342; cursor: pointer; white-space: nowrap; font-size: 13px; }
+  .file-tab.active { background: #1e293b; border-color: #3b82f6; }
+  .file-tab .close { display: inline-block; font-size: 12px; color: #9ca3af; background: transparent; border: none; cursor: pointer; padding: 0 2px; }
+  .file-tab .close:hover { color: #ef4444; }
+  .add-file-btn { margin-left: 4px; padding: 6px 10px; border-radius: 6px; background: #111827; color: var(--text); border: 1px solid #2a3342; cursor: pointer; font-size: 14px; }
+  .add-file-btn:hover { background: #1f2937; }
+  .file-switcher { margin-left: auto; background: #111827; border: 1px solid #2a3342; color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  #editor { flex: 1; }
+    .toolbar { padding: 8px; background: #111827; display: flex; gap: 8px; border-top: 1px solid #2a3342; align-items: center; }
+  .btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #2a3342; background: #1f2937; color: var(--text); cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; }
+    .btn:hover { background: #374151; }
+    .btn.primary { background: #2563eb; border-color: #2563eb; }
+    .btn.primary:hover { background: #1d4ed8; }
+    .btn.success { background: var(--success); border-color: var(--success); }
+    .btn.error { background: var(--error); border-color: var(--error); }
+    .btn.warning { background: var(--warning); border-color: var(--warning); color: #000; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  #output { padding: 12px; background: #0b1220; border-top: 1px solid #2a3342; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px; overflow-y: auto; flex: 1 1 auto; min-height: 80px; }
+    #participantsDrawer { width: 400px; border-left: 1px solid #2a3342; background: #0b1220; display: flex; flex-direction: column; }
+    #plist { list-style: none; margin: 0; padding: 12px; flex: 1; }
+    #plist li { display: flex; justify-content: space-between; align-items: center; padding: 10px; margin-bottom: 8px; border: 1px solid #2a3342; border-radius: 6px; background: #111827; }
+    .participant-info { display: flex; flex-direction: column; flex: 1; }
+    .participant-name { font-weight: 500; }
+    .participant-role { font-size: 12px; color: #9ca3af; }
+    .participant-audio { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .audio-indicator { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
+    .audio-indicator.speaking { background: var(--success); animation: pulse 1s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    .participant-actions { display: flex; gap: 4px; }
+    .action-btn { padding: 4px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #374151; background: #1f2937; color: var(--text); cursor: pointer; }
+    .action-btn:hover { background: #374151; }
+  /* removed banner; moved audio to top */
+  #audioSection { padding: 12px; border-top: 1px solid #2a3342; background: #111827; }
+    .audio-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .audio-participant { padding: 8px 12px; margin: 4px 0; background: #1f2937; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .audio-status { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #6b7280; color: white; }
+    .audio-status.connected { background: var(--success); }
+    .audio-status.muted { background: var(--error); }
+  /* topbar mic button */
+  #muteButton { display: flex; align-items: center; gap: 6px; background: #374151; }
+    #muteButton.muted { background: var(--error); border-color: var(--error); }
+    #muteButton:not(.muted) { background: var(--success); border-color: var(--success); }
+    .connection-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9ca3af; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
+    .status-dot.connected { background: var(--success); }
+    .status-dot.disconnected { background: var(--error); }
+  #audioLevel { width: 60px; height: 4px; background: #374151; border-radius: 2px; overflow: hidden; }
+    #audioLevelFill { height: 100%; width: 0%; background: var(--success); transition: width 0.1s; }
+  .meeting-stats { display: flex; gap: 16px; font-size: 12px; color: #9ca3af; }
+  /* Toast notifications (non-intrusive) */
+  #toastContainer { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: rgba(30,41,59,0.95); color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 8px 12px; font-size: 14px; box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
+
+    /* Input Controls Styles */
+    .input-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .input-controls input {
+      padding: 8px 12px;
+      border: 1px solid #374151;
+      border-radius: 4px;
+      background: #1f2937;
+      color: white;
+      width: 200px;
+      font-family: system-ui, sans-serif;
+    }
+
+    .input-controls input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .input-controls input:enabled {
+      border-color: #059669;
+    }
+
+    .input-controls input:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .input-controls input::placeholder {
+      color: #9ca3af;
+    }
+
+    /* Chat Styles */
+    .drawer-tabs {
+      display: flex;
+      background: #111827;
+      border-bottom: 1px solid #2a3342;
+    }
+    
+    .tab-btn {
+      flex: 1;
+      padding: 12px;
+      background: none;
+      border: none;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .tab-btn.active {
+      background: #1e293b;
+      border-bottom: 2px solid #3b82f6;
+    }
+    
+    .tab-content {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+    }
+    
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-header {
+      padding: 12px;
+      border-bottom: 1px solid #2a3342;
+      background: #111827;
+    }
+    
+    .chat-messages {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .chat-message {
+      max-width: 80%;
+      padding: 8px 12px;
+      border-radius: 12px;
+      position: relative;
+      word-wrap: break-word;
+    }
+    
+    .chat-message.me {
+      align-self: flex-end;
+      background: var(--chat-bubble-me);
+      border-bottom-right-radius: 4px;
+    }
+    
+    .chat-message.other {
+      align-self: flex-start;
+      background: var(--chat-bubble-other);
+      border-bottom-left-radius: 4px;
+    }
+    
+    .message-sender {
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 2px;
+      opacity: 0.9;
+    }
+    
+    .message-text {
+      margin: 4px 0;
+    }
+    
+    .message-time {
+      font-size: 10px;
+      opacity: 0.7;
+      text-align: right;
+      margin-top: 4px;
+    }
+    
+    .chat-input-container {
+      padding: 12px;
+      border-top: 1px solid #2a3342;
+      background: #111827;
+    }
+    
+    .chat-input-group {
+      display: flex;
+      gap: 8px;
+    }
+    
+    #chatInput {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #374151;
+      border-radius: 20px;
+      background: #1f2937;
+      color: var(--text);
+      outline: none;
+    }
+    
+    #chatInput:focus {
+      border-color: #3b82f6;
+    }
+    
+    #sendChatBtn {
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    
+    #sendChatBtn:hover {
+      background: #1d4ed8;
+    }
+
+    /* Status bar */
+    .statusbar { display: flex; gap: 16px; align-items: center; padding: 6px 10px; font-size: 12px; background: #0b1220; border-top: 1px solid #2a3342; color: #9ca3af; }
+    .status-pill { padding: 2px 6px; border-radius: 10px; background: #1f2937; border: 1px solid #2a3342; color: #e5e7eb; }
+    .statusbar .spacer { flex: 1; }
+
+    /* Simple context menu for tabs */
+    .context-menu { position: absolute; background: #111827; border: 1px solid #2a3342; border-radius: 6px; padding: 6px 0; z-index: 9999; display: none; min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .context-menu .item { padding: 8px 12px; color: #e5e7eb; cursor: pointer; }
+    .context-menu .item:hover { background: #1f2937; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+  <button id="toggleNavBtn" class="btn sm" title="Toggle datasets panel">☰</button>
+  <span style="font-weight: bold; color: #3b82f6;">SCIAM</span>
+      <span class="session-code">Session: {{ session_id }}</span>
+      <div class="connection-status">
+        <span id="statusDot" class="status-dot connected"></span>
+        <span id="statusText">Connected</span>
+      </div>
+    </div>
+    <div class="actions">
+      <span id="writerDot" class="writer-dot" title="You are the writer"></span>
+      <div id="audioLevel" title="Mic level"><div id="audioLevelFill"></div></div>
+      <button id="muteButton" class="btn sm" title="Toggle Mute"><span id="muteIcon">🎤</span><span id="muteText">Mute</span></button>
+      <button id="settingsBtn" class="btn sm" title="Session settings and info">⚙️</button>
+      <button id="helpBtn" class="btn sm" title="Help">❓</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Left Navigation (Datasets, like Colab) -->
+    <div class="nav-left">
+      <div class="section">
+        <h4>📁 Datasets</h4>
+        <input type="file" id="datasetFile" style="color:#fff; width:100%; margin-bottom:8px;" />
+        <div style="display:flex; gap:8px;">
+          <button id="uploadDatasetBtn" class="btn sm" title="Upload selected file">Upload</button>
+          <button id="refreshDatasetsBtn" class="btn sm" title="Refresh dataset list">Refresh</button>
+        </div>
+      </div>
+      <div class="section" style="flex:1; overflow:auto;">
+        <div id="datasetList" style="color:#9ca3af;">
+          <div style="font-size:12px;">No datasets uploaded</div>
+        </div>
+      </div>
+    </div>
+    <div class="left">
+      <!-- File Tabs -->
+      <div id="fileTabs" class="file-tabs"></div>
+      <div id="workArea" class="work-area">
+        <div id="topPane" class="top-pane">
+          <div id="editor"></div>
+          <div class="toolbar">
+            <button id="runBtn" class="btn primary sm" title="Run (Ctrl+Enter)">▶ Run</button>
+            <button id="clearBtn" class="btn sm" title="Clear Output">🗑️ Clear</button>
+            <button id="downloadBtn" class="btn sm" title="Download current file">⬇️ Download</button>
+            <div style="flex: 1;"></div>
+          </div>
+        </div>
+        <div id="divider" class="divider" title="Drag to resize editor/output"></div>
+        <div id="bottomPane" class="bottom-pane">
+          <div class="input-controls" style="padding: 8px 12px; background:#111827; border-top:1px solid #2a3342;" title="Send input to the currently running program">
+            <input type="text" id="staticInput" placeholder="Run code to enable input..." disabled />
+            <button id="sendInputBtn" class="btn sm" style="background:#059669;" disabled>Send Input</button>
+          </div>
+          <div id="output"></div>
+        </div>
+      </div>
+
+      <!-- Status Bar -->
+      <div id="statusBar" class="statusbar">
+        <span>File: <span id="statusFile" class="status-pill">-</span></span>
+        <span>Role: <span id="statusRole" class="status-pill">Viewer</span></span>
+        <span>Peers: <span id="statusPeers" class="status-pill">0</span></span>
+        <div class="spacer"></div>
+        <span>Session: <span class="status-pill">{{ session_id }}</span></span>
+        <span>Run: <span id="statusRun" class="status-pill">Idle</span></span>
+      </div>
+    </div>
+
+    <!-- Right Drawer with Tabs -->
+    <div id="participantsDrawer">
+      <div class="drawer-tabs">
+        <button class="tab-btn active" data-tab="participants">👥 Participants</button>
+        <button class="tab-btn" data-tab="chat">💬 Chat</button>
+      </div>
+      
+      <!-- Participants Tab -->
+      <div id="participantsTab" class="tab-content active">
+        <div style="padding: 12px; border-bottom: 1px solid #2a3342;">
+          <h3 style="margin: 0;">Participants</h3>
+        </div>
+        <ul id="plist"></ul>
+
+        
+
+        <div id="audioSection">
+          <div class="audio-header">
+            <h4 style="margin: 0;">Voice Chat</h4>
+            <span id="audioCount" style="font-size: 12px; color: #9ca3af;">0 users</span>
+          </div>
+          <div id="audioList"></div>
+        </div>
+      </div>
+      
+      <!-- Chat Tab -->
+      <div id="chatTab" class="tab-content">
+        <div class="chat-header">
+          <h3 style="margin: 0;">Group Chat</h3>
+        </div>
+        <div id="chatMessages" class="chat-messages">
+          <div style="text-align: center; color: #9ca3af; padding: 20px;">
+            No messages yet. Start a conversation!
+          </div>
+        </div>
+        <div class="chat-input-container">
+          <div class="chat-input-group">
+            <input type="text" id="chatInput" placeholder="Type a message..." maxlength="500" />
+            <button id="sendChatBtn">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+
+  <script>
+    const socket = io();
+    const sessionId = "{{ session_id }}";
+    // Prefer visitor-provided display name from localStorage; fallback to server value
+    let myName = (function(){
+      try { return localStorage.getItem('display_name') || "{{ user_name or 'Anonymous' }}"; } catch(e) { return "{{ user_name or 'Anonymous' }}"; }
+    })();
+    // Left panel toggle
+    const containerEl = document.querySelector('.container');
+    const toggleNavBtn = document.getElementById('toggleNavBtn');
+    toggleNavBtn.addEventListener('click', () => {
+      containerEl.classList.toggle('nav-collapsed');
+    });
+
+    // Resizable editor/output
+    const workArea = document.getElementById('workArea');
+    const divider = document.getElementById('divider');
+    const bottomPane = document.getElementById('bottomPane');
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    divider.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startY = e.clientY;
+      startHeight = bottomPane.getBoundingClientRect().height;
+      document.body.style.cursor = 'ns-resize';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      const dy = e.clientY - startY;
+      const newHeight = Math.max(120, startHeight - dy); // bottom min 120px
+      const maxHeight = Math.max(120, workArea.clientHeight - 150 - 6); // leave min for top
+      bottomPane.style.height = Math.min(newHeight, maxHeight) + 'px';
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = '';
+      }
+    });
+
+    let mySid = null;
+    let writerId = null;
+    let hostId = null;
+    let editor;
+  // Multi-file state
+  let files = {}; // { fileName: content }
+  let activeFile = null;
+  let currentProcessId = null; // for code execution tracking
+  // Context menu state
+  let tabContextMenuEl = null;
+  let tabContextMenuTarget = null;
+    
+    // Audio State (Google Meet Style)
+    let isAudioConnected = false;
+    let isMuted = false;
+    let localStream = null;
+    let pcPeers = {};
+    let audioContext = null;
+    let analyser = null;
+    let dataArray = null;
+
+    // PRODUCTION WEBRTC CONFIGURATION FOR CROSS-NETWORK
+    const rtcConfig = {
+      iceServers: [
+        // Multiple STUN servers for reliability
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
+        
+        // Free public TURN servers for cross-network connectivity
+        { 
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject", 
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443?transport=tcp",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        // Backup TURN servers
+        {
+          urls: "turn:turn.bistri.com:80",
+          username: "homeo",
+          credential: "homeo"
+        },
+        {
+          urls: "turn:turn.anyfirewall.com:443?transport=tcp",
+          username: "webrtc",
+          credential: "webrtc"
+        }
+      ],
+      iceTransportPolicy: "all",
+      rtcpMuxPolicy: "require"
+    };
+
+    // Initialize Monaco Editor
+    require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs' }});
+    require(["vs/editor/editor.main"], function () {
+      editor = monaco.editor.create(document.getElementById("editor"), {
+        value: "",
+        language: "python",
+        theme: "vs-dark",
+        automaticLayout: true,
+        readOnly: true,
+        fontSize: 14,
+        minimap: { enabled: false }
+      });
+
+      editor.onDidChangeModelContent(() => {
+        if (!activeFile) return;
+        if (mySid && mySid === writerId) {
+          const val = editor.getValue();
+          files[activeFile] = val;
+          socket.emit("code_change", { session_id: sessionId, file_name: activeFile, content: val });
+        }
+      });
+    });
+
+    // Socket connection management
+    socket.on("connect", () => {
+      mySid = socket.id;
+      updateConnectionStatus(true, "Connected");
+      socket.emit("join_session", { session_id: sessionId, name: myName });
+      console.log("✅ Connected to server with ID:", mySid);
+      
+      // Request chat history
+      socket.emit("get_chat_history", { session_id: sessionId });
+      
+      // AUTO-CONNECT AUDIO (Google Meet Style)
+      initializeAudio();
+    });
+
+    socket.on("disconnect", () => {
+      updateConnectionStatus(false, "Disconnected");
+      console.log("❌ Disconnected from server");
+      
+      // Auto-disconnect audio when leaving
+      disconnectAudio();
+    });
+
+    function updateConnectionStatus(connected, message) {
+      const statusDot = document.getElementById("statusDot");
+      const statusText = document.getElementById("statusText");
+      
+      statusDot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
+      statusText.textContent = message;
+    }
+
+    // ==================== CHAT FUNCTIONALITY ADDED BELOW ====================
+
+    // Tab functionality
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabName = btn.getAttribute('data-tab');
+        
+        // Update active tab button
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Update active tab content
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById(tabName + 'Tab').classList.add('active');
+      });
+    });
+
+    // Chat functionality
+    const chatInput = document.getElementById('chatInput');
+    const sendChatBtn = document.getElementById('sendChatBtn');
+    const chatMessages = document.getElementById('chatMessages');
+
+    function sendChatMessage() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+      
+      socket.emit("send_chat_message", {
+        session_id: sessionId,
+        message: message
+      });
+      
+      chatInput.value = '';
+      chatInput.focus();
+    }
+
+    sendChatBtn.addEventListener('click', sendChatMessage);
+    
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendChatMessage();
+      }
+    });
+
+    // Handle incoming chat messages
+    socket.on("new_chat_message", (messageData) => {
+      addChatMessage(messageData);
+    });
+
+    socket.on("chat_history", (data) => {
+      chatMessages.innerHTML = '';
+      if (data.messages && data.messages.length > 0) {
+        data.messages.forEach(message => {
+          addChatMessage(message);
+        });
+      } else {
+        chatMessages.innerHTML = '<div style="text-align: center; color: #9ca3af; padding: 20px;">No messages yet. Start a conversation!</div>';
+      }
+    });
+
+    function addChatMessage(messageData) {
+      const isMe = messageData.sender_sid === mySid;
+      
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `chat-message ${isMe ? 'me' : 'other'}`;
+      
+      messageDiv.innerHTML = `
+        ${!isMe ? `<div class="message-sender">${messageData.sender_name}</div>` : ''}
+        <div class="message-text">${escapeHtml(messageData.message)}</div>
+        <div class="message-time">${messageData.time_display || formatTime(messageData.timestamp)}</div>
+      `;
+      
+      // Remove the "no messages" placeholder if it exists
+      const placeholder = chatMessages.querySelector('div[style*="text-align: center"]');
+      if (placeholder) {
+        placeholder.remove();
+      }
+      
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatTime(timestamp) {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ==================== END OF CHAT FUNCTIONALITY ====================
+
+    // [Keep all your existing JavaScript code exactly as it is below]
+    // Code synchronization, participants management, audio functions, etc.
+    // ... (all your existing code remains unchanged)
+
+    // Session files initialization
+    socket.on("session_files", data => {
+      files = data.files || {};
+      activeFile = data.active_file || Object.keys(files)[0] || null;
+      // Initialize UI and editor content via setActiveFile to also set language
+      if (activeFile) {
+        setActiveFile(activeFile, false);
+      } else {
+        refreshFileTabs();
+        if (editor) editor.setValue("");
+      }
+      updateStatusBar();
+    });
+
+    // Code synchronization per file
+    socket.on("code_update", data => {
+      const fname = data.file_name || activeFile;
+      if (!fname) return;
+      if (typeof data.content === 'string') {
+        files[fname] = data.content;
+        if (editor && fname === activeFile && mySid !== writerId) {
+          const position = editor.getPosition();
+          editor.setValue(data.content);
+          if (position) editor.setPosition(position);
+        }
+      }
+    });
+
+    // Active tab changed
+    socket.on("active_tab_changed", data => {
+      const fname = data.file_name;
+      if (!fname || !files.hasOwnProperty(fname)) return;
+      setActiveFile(fname, false);
+      updateStatusBar();
+    });
+
+    // Tab added/removed/renamed
+    socket.on("tab_added", data => {
+      const { file_name, content } = data;
+      files[file_name] = content || "";
+      refreshFileTabs();
+      // Switch to the newly added tab
+      setActiveFile(file_name, true);
+      updateStatusBar();
+    });
+
+    socket.on("tab_removed", data => {
+      const { file_name, active_file } = data;
+      if (files.hasOwnProperty(file_name)) delete files[file_name];
+      refreshFileTabs();
+      if (active_file && files.hasOwnProperty(active_file)) {
+        setActiveFile(active_file, false);
+      } else {
+        const first = Object.keys(files)[0] || null;
+        if (first) setActiveFile(first, false);
+      }
+      updateStatusBar();
+    });
+
+    socket.on("tab_renamed", data => {
+      const { old_name, new_name } = data;
+      if (!files.hasOwnProperty(old_name)) return;
+      files[new_name] = files[old_name];
+      delete files[old_name];
+      if (activeFile === old_name) activeFile = new_name;
+      refreshFileTabs();
+      if (editor && activeFile) editor.setValue(files[activeFile] || "");
+      updateStatusBar();
+    });
+
+    function refreshFileTabs() {
+      const bar = document.getElementById('fileTabs');
+      bar.innerHTML = '';
+  const isHost = mySid === hostId;
+  const isWriter = mySid === writerId;
+      const fileCount = Object.keys(files).length;
+      Object.keys(files).forEach(name => {
+        const tab = document.createElement('div');
+        tab.className = 'file-tab' + (name === activeFile ? ' active' : '');
+        const label = document.createElement('span');
+        label.textContent = name;
+        tab.appendChild(label);
+
+  if (isHost || isWriter) {
+          const close = document.createElement('button');
+          close.className = 'close';
+          close.title = 'Close tab';
+          close.textContent = '×';
+          // Disable close when only one file remains
+          if (fileCount <= 1) {
+            close.disabled = true;
+            close.style.opacity = '0.4';
+            close.style.cursor = 'not-allowed';
+          }
+          close.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (fileCount <= 1) return;
+            if (!confirm(`Delete ${name}?`)) return;
+            socket.emit('remove_tab', { session_id: sessionId, file_name: name });
+          });
+          tab.appendChild(close);
+
+          // Rename on double click
+          tab.addEventListener('dblclick', () => {
+            const newName = prompt('Rename file', name);
+            if (newName && newName.trim() && newName !== name) {
+              socket.emit('rename_tab', { session_id: sessionId, old_name: name, new_name: newName.trim() });
+            }
+          });
+          // Context menu
+          tab.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showTabContextMenu(e.clientX, e.clientY, name, { canRename: true, canClose: fileCount > 1 });
+          });
+        }
+
+        tab.addEventListener('click', () => {
+          setActiveFile(name, true);
+        });
+
+        bar.appendChild(tab);
+      });
+
+      // Add button (host only)
+      const addBtn = document.createElement('button');
+      addBtn.id = 'addFileBtn';
+      addBtn.className = 'add-file-btn';
+      addBtn.textContent = '+ Add File';
+      addBtn.style.display = (isHost || isWriter) ? 'inline-block' : 'none';
+      addBtn.addEventListener('click', () => {
+        const fileName = prompt('New file name', 'file.py');
+        if (fileName && fileName.trim()) {
+          socket.emit('add_tab', { session_id: sessionId, file_name: fileName.trim() });
+        }
+      });
+      bar.appendChild(addBtn);
+
+      // Quick file switcher
+      const switcher = document.createElement('select');
+      switcher.id = 'fileSwitcher';
+      switcher.className = 'file-switcher';
+      Object.keys(files).forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n; if (n === activeFile) opt.selected = true; switcher.appendChild(opt);
+      });
+      switcher.addEventListener('change', () => {
+        const name = switcher.value;
+        setActiveFile(name, true);
+      });
+      bar.appendChild(switcher);
+    }
+
+    function setActiveFile(name, broadcast) {
+      if (!name || !files.hasOwnProperty(name)) return;
+      // Save current content
+      if (editor && activeFile) {
+        files[activeFile] = editor.getValue();
+      }
+      activeFile = name;
+      refreshFileTabs();
+      if (editor) {
+        const content = files[name] || '';
+        editor.setValue(content);
+        // Infer language by extension (basic)
+        const ext = (name.split('.').pop() || '').toLowerCase();
+        let lang = 'python';
+        if (['js','mjs','cjs'].includes(ext)) lang = 'javascript';
+        if (['ts'].includes(ext)) lang = 'typescript';
+        if (['json'].includes(ext)) lang = 'json';
+        if (['html'].includes(ext)) lang = 'html';
+  if (['css'].includes(ext)) lang = 'css';
+        monaco.editor.setModelLanguage(editor.getModel(), lang);
+      }
+      if (broadcast && (mySid === hostId || mySid === writerId)) {
+        socket.emit('tab_change', { session_id: sessionId, file_name: name });
+      }
+      updateStatusBar();
+    }
+
+  // Participants management
+    socket.on("participants_update", data => {
+      const plist = document.getElementById("plist");
+      plist.innerHTML = "";
+      
+      writerId = data.writer_id;
+      hostId = data.host_id;
+
+      let participantCount = 0;
+
+      for (const [sid, info] of Object.entries(data.participants)) {
+        participantCount++;
+        
+        const li = document.createElement("li");
+        
+        const infoDiv = document.createElement("div");
+        infoDiv.className = "participant-info";
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "participant-name";
+        nameSpan.textContent = info.name + (sid === mySid ? " (You)" : "");
+        
+        const roleSpan = document.createElement("span");
+        roleSpan.className = "participant-role";
+        
+        let roleText = "";
+        if (sid === hostId) roleText += "👑 Host";
+        if (sid === writerId) roleText += " ✏️ Writer";
+        if (!roleText) roleText = "Participant";
+        
+        roleSpan.textContent = roleText;
+        
+        // Audio status indicator
+        const audioDiv = document.createElement("div");
+        audioDiv.className = "participant-audio";
+        
+        const audioIndicator = document.createElement("div");
+        audioIndicator.className = "audio-indicator";
+        audioIndicator.id = `audio-indicator-${sid}`;
+        
+        const audioStatus = document.createElement("span");
+        audioStatus.textContent = "Connected";
+        audioStatus.style.fontSize = "10px";
+        audioStatus.style.color = "#9ca3af";
+        
+        audioDiv.appendChild(audioIndicator);
+        audioDiv.appendChild(audioStatus);
+        
+        infoDiv.appendChild(nameSpan);
+        infoDiv.appendChild(roleSpan);
+        infoDiv.appendChild(audioDiv);
+
+        const actionsDiv = document.createElement("div");
+        actionsDiv.className = "participant-actions";
+        
+        // Only show action buttons if I'm the host and this isn't me
+        if (mySid === hostId && sid !== mySid) {
+          const grantBtn = document.createElement("button");
+          grantBtn.className = "action-btn";
+          grantBtn.textContent = sid === writerId ? "Revoke Write" : "Grant Write";
+          grantBtn.onclick = () => {
+            if (sid === writerId) {
+              socket.emit("revoke_write", { session_id: sessionId });
+            } else {
+              socket.emit("grant_write", { session_id: sessionId, target_sid: sid });
+            }
+          };
+          actionsDiv.appendChild(grantBtn);
+        }
+
+        li.appendChild(infoDiv);
+        li.appendChild(actionsDiv);
+        plist.appendChild(li);
+      }
+
+  // Update participant count (if present)
+  const pcEl = document.getElementById("participantCount");
+  if (pcEl) pcEl.textContent = participantCount;
+
+      // Update editor read-only status and writer indicator
+      if (editor) {
+        const isWriter = mySid === writerId;
+        editor.updateOptions({ readOnly: !isWriter });
+        const dot = document.getElementById("writerDot");
+        if (dot) dot.style.display = isWriter ? 'inline-block' : 'none';
+      }
+
+      // Update file tabs (host may have changed)
+      refreshFileTabs();
+      updateStatusBar(data.participants);
+
+      // Auto-connect to new participants (Google Meet Style)
+      if (isAudioConnected) {
+        connectToNewParticipants(data.participants);
+      }
+    });
+
+    function connectToNewParticipants(participants) {
+      for (const [sid, info] of Object.entries(participants)) {
+        if (sid !== mySid && !pcPeers[sid] && isAudioConnected) {
+          createPeerConnection(sid, info.name);
+        }
+      }
+    }
+
+    // (run/clear are defined later with input streaming support)
+
+    // [Keep all your existing audio functions - initializeAudio, setupAudioVisualization, etc.]
+    // ... (all audio functions remain the same from your previous version)
+
+    // GOOGLE MEET STYLE AUDIO SYSTEM
+  const muteButton = document.getElementById("muteButton");
+  const muteIcon = document.getElementById("muteIcon");
+  const muteText = document.getElementById("muteText");
+  const audioStatus = document.getElementById("audioStatus");
+  const peerCount = document.getElementById("peerCount");
+    const audioList = document.getElementById("audioList");
+    const audioCount = document.getElementById("audioCount");
+    const audioLevelFill = document.getElementById("audioLevelFill");
+
+    // Auto-initialize audio when joining
+    async function initializeAudio() {
+      try {
+        console.log("🎤 Auto-connecting audio (Google Meet style)...");
+        
+        // Get microphone access
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          }
+        });
+        
+        isAudioConnected = true;
+        
+        // Setup audio visualization
+        setupAudioVisualization();
+        
+        // Connect to existing participants
+        setTimeout(() => {
+          socket.emit("get_participants", { session_id: sessionId });
+        }, 1000);
+        
+        console.log("✅ Audio auto-connected successfully");
+        showMessage("🎤 Voice chat is now active! Click Mute/Unmute to control your microphone.");
+
+      } catch (error) {
+        console.error("❌ Failed to auto-connect audio:", error);
+  showMessage("❌ Could not access microphone. Please check browser permissions.");
+  if (audioStatus) { audioStatus.textContent = "Failed"; audioStatus.style.color = "#ef4444"; }
+      }
+    }
+
+    function setupAudioVisualization() {
+      try {
+        audioContext = new AudioContext();
+        analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(localStream);
+        source.connect(analyser);
+        analyser.fftSize = 256;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        updateAudioLevel();
+      } catch (error) {
+        console.error("Audio visualization error:", error);
+      }
+    }
+
+    function updateAudioLevel() {
+      if (!analyser || !isAudioConnected) {
+        audioLevelFill.style.width = "0%";
+        requestAnimationFrame(updateAudioLevel);
+        return;
+      }
+      
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      let average = sum / dataArray.length;
+      
+      // Convert to percentage (0-100%)
+      let level = Math.min(100, (average / 128) * 100);
+      audioLevelFill.style.width = level + "%";
+      
+      // Update speaking indicator for myself
+      const myIndicator = document.getElementById(`audio-indicator-${mySid}`);
+      if (myIndicator && !isMuted && level > 10) {
+        myIndicator.classList.add('speaking');
+      } else if (myIndicator) {
+        myIndicator.classList.remove('speaking');
+      }
+      // If muted and user appears to be speaking, gently notify (no output pollution)
+      if (isMuted && level > 18) {
+        const now = Date.now();
+        if (!lastMutedToastAt || (now - lastMutedToastAt) > 6000) {
+          showToast('You are muted — unmute to speak');
+          lastMutedToastAt = now;
+        }
+      }
+      
+      requestAnimationFrame(updateAudioLevel);
+    }
+
+    // Mute/Unmute functionality
+    muteButton.addEventListener("click", toggleMute);
+
+    function toggleMute() {
+      if (!isAudioConnected) {
+        showMessage("❌ Audio is not connected. Please refresh the page.");
+        return;
+      }
+      
+      if (isMuted) {
+        // Unmute
+        unmuteAudio();
+      } else {
+        // Mute
+        muteAudio();
+      }
+    }
+
+    function muteAudio() {
+      if (localStream) {
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = false;
+        });
+      }
+      
+      isMuted = true;
+      muteButton.classList.add("muted");
+      muteIcon.textContent = "🔇";
+      muteText.textContent = "Unmute";
+      audioLevelFill.style.width = "0%";
+      
+      console.log("🔇 Microphone muted");
+      showMessage("🔇 You are muted");
+    }
+
+    function unmuteAudio() {
+      if (localStream) {
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = true;
+        });
+      }
+      
+      isMuted = false;
+      muteButton.classList.remove("muted");
+      muteIcon.textContent = "🎤";
+      muteText.textContent = "Mute";
+      
+      console.log("🎤 Microphone unmuted");
+      showMessage("🎤 You are unmuted - others can hear you");
+    }
+
+    async function disconnectAudio() {
+      console.log("🎤 Disconnecting audio...");
+      
+      // Close all peer connections
+      Object.values(pcPeers).forEach(pc => {
+        pc.close();
+      });
+      pcPeers = {};
+      
+      // Stop local stream
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      
+      // Close audio context
+      if (audioContext) {
+        await audioContext.close();
+        audioContext = null;
+      }
+      
+      isAudioConnected = false;
+  if (audioStatus) { audioStatus.textContent = "Disconnected"; audioStatus.style.color = "#ef4444"; }
+      audioLevelFill.style.width = "0%";
+      
+      // Clear audio list
+      audioList.innerHTML = "";
+      updateAudioCount();
+      
+      console.log("✅ Audio disconnected");
+    }
+
+    function updateAudioCount() {
+  const count = Object.keys(pcPeers).length;
+  if (peerCount) peerCount.textContent = count;
+  if (audioCount) audioCount.textContent = `${count} user${count !== 1 ? 's' : ''}`;
+    }
+
+    // Developer-only audio log (no output pollution)
+    function showMessage(message) {
+      console.log("[Audio]", message);
+    }
+
+    // Lightweight toast notifications
+    let lastMutedToastAt = 0;
+    function showToast(message, duration = 3000) {
+      const cont = document.getElementById('toastContainer');
+      if (!cont) return;
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.textContent = message;
+      cont.appendChild(el);
+      setTimeout(() => {
+        el.style.transition = 'opacity 200ms';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 220);
+      }, duration);
+    }
+
+    // WebRTC Peer Connection Management
+    function createPeerConnection(peerId, peerName) {
+      console.log(`🔗 Creating peer connection to: ${peerName}`);
+      
+      const pc = new RTCPeerConnection(rtcConfig);
+      pcPeers[peerId] = pc;
+
+      // Add local stream to connection
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          pc.addTrack(track, localStream);
+        });
+      }
+
+      // Handle remote stream
+      pc.ontrack = (event) => {
+        console.log(`🎧 Received audio stream from: ${peerName}`);
+        const audioElement = document.createElement("audio");
+        audioElement.autoplay = true;
+        audioElement.controls = false;
+        audioElement.style.display = "none";
+        audioElement.srcObject = event.streams[0];
+        document.body.appendChild(audioElement);
+        
+        addAudioParticipant(peerId, peerName, "connected");
+        showMessage(`🎧 Connected to ${peerName}'s audio`);
+      };
+
+      // Handle ICE candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit("webrtc_ice_candidate", {
+            target: peerId,
+            candidate: event.candidate
+          });
+        }
+      };
+
+      // Handle connection state
+      pc.onconnectionstatechange = () => {
+        console.log(`Connection state with ${peerName}: ${pc.connectionState}`);
+        if (pc.connectionState === 'connected') {
+          updateAudioParticipantStatus(peerId, 'connected');
+        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          updateAudioParticipantStatus(peerId, 'disconnected');
+        }
+      };
+
+      // Create and send offer
+      pc.createOffer()
+        .then(offer => pc.setLocalDescription(offer))
+        .then(() => {
+          socket.emit("webrtc_offer", {
+            target: peerId,
+            sdp: pc.localDescription
+          });
+        })
+        .catch(error => {
+          console.error("Error creating offer:", error);
+        });
+
+      return pc;
+    }
+
+    function addAudioParticipant(peerId, peerName, status) {
+      const existing = document.getElementById(`audio-${peerId}`);
+      if (existing) {
+        existing.remove();
+      }
+
+      const div = document.createElement("div");
+      div.id = `audio-${peerId}`;
+      div.className = "audio-participant";
+      div.innerHTML = `
+        <span>${peerName}</span>
+        <span class="audio-status ${status}">${status}</span>
+      `;
+      audioList.appendChild(div);
+      updateAudioCount();
+    }
+
+    function updateAudioParticipantStatus(peerId, status) {
+      const element = document.getElementById(`audio-${peerId}`);
+      if (element) {
+        const statusEl = element.querySelector('.audio-status');
+        statusEl.textContent = status;
+        statusEl.className = `audio-status ${status}`;
+      }
+    }
+
+    // WebRTC signaling handlers
+    socket.on("webrtc_offer", async (data) => {
+      if (!isAudioConnected) return;
+      
+      const { sid, sdp } = data;
+      let pc = pcPeers[sid];
+      
+      if (!pc) {
+        pc = createPeerConnection(sid, "User");
+      }
+      
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        
+        socket.emit("webrtc_answer", {
+          target: sid,
+          sdp: pc.localDescription
+        });
+      } catch (error) {
+        console.error("Error handling offer:", error);
+      }
+    });
+
+    socket.on("webrtc_answer", async (data) => {
+      if (!isAudioConnected) return;
+      
+      const { sid, sdp } = data;
+      const pc = pcPeers[sid];
+      
+      if (pc) {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        } catch (error) {
+          console.error("Error handling answer:", error);
+        }
+      }
+    });
+
+    socket.on("webrtc_ice_candidate", async (data) => {
+      if (!isAudioConnected) return;
+      
+      const { sid, candidate } = data;
+      const pc = pcPeers[sid];
+      
+      if (pc && candidate) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          console.error("Error adding ICE candidate:", error);
+        }
+      }
+    });
+
+    // Request participants list
+    socket.on("get_participants", () => {
+      // This would be handled by the server
+    });
+
+    // UI Helpers
+    document.getElementById("helpBtn").addEventListener("click", () => {
+      alert(`SCIAM Features:\n\n💬 NEW: WhatsApp-style chat\n🎤 AUDIO: Auto-connect voice chat\n🐍 CODE: Python execution\n👥 COLLAB: Real-time collaboration\n\nUse the tabs to switch between Participants and Chat!`);
+    });
+
+    document.getElementById("settingsBtn").addEventListener("click", () => {
+      alert("Session Settings:\n\n• Audio: " + (isAudioConnected ? "Connected" : "Disconnected") + "\n• Mute: " + (isMuted ? "On" : "Off") + "\n• Role: " + (mySid === writerId ? "Writer" : "Viewer") + "\n• Connected Peers: " + Object.keys(pcPeers).length);
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      disconnectAudio();
+    });
+
+    
+    const staticInput = document.getElementById("staticInput");
+    const sendInputBtn = document.getElementById("sendInputBtn");
+
+    document.getElementById("runBtn").onclick = async () => {
+        const output = document.getElementById("output");
+        output.textContent = "🚀 Starting code execution...\n";
+        output.scrollTop = output.scrollHeight;
+        
+        const runBtn = document.getElementById("runBtn");
+        runBtn.disabled = true;
+        runBtn.textContent = "⏳ Running...";
+        runBtn.classList.add("warning");
+      document.getElementById('statusRun').textContent = 'Running';
+      document.getElementById('statusRun').classList.add('running');
+        
+        // Enable input controls
+        staticInput.disabled = false;
+        sendInputBtn.disabled = false;
+        staticInput.placeholder = "Type input for program...";
+        staticInput.focus();
+        
+        try {
+            const response = await fetch("/run_code", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    code: editor.getValue(), 
+                    session_id: sessionId 
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === "started") {
+                currentProcessId = data.process_id;
+                console.log("✅ Code execution started with process ID:", currentProcessId);
+                output.textContent += "Program started. Use the input box above to provide input.\n";
+        document.getElementById('statusRun').textContent = 'Running';
+            } else if (data.status === "error") {
+                output.textContent += `❌ ${data.message}\n`;
+                resetExecutionState();
+            } else {
+                output.textContent += "❌ Unexpected response from server\n";
+                resetExecutionState();
+            }
+        } catch (error) {
+            output.textContent += `❌ Network error: ${error.message}\n`;
+            resetExecutionState();
+        }
+    };
+
+    // Handle sending input from static input box
+    sendInputBtn.addEventListener("click", sendStaticInput);
+    
+    staticInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            sendStaticInput();
+        }
+    });
+
+  function sendStaticInput() {
+        const userInput = staticInput.value.trim();
+        
+        if (!userInput) {
+            return;
+        }
+        
+        if (!currentProcessId) {
+            const output = document.getElementById("output");
+            output.textContent += "❌ No program is currently running\n";
+            return;
+        }
+        
+        const output = document.getElementById("output");
+        output.textContent += `📥 [Input]: ${userInput}\n`;
+        output.scrollTop = output.scrollHeight;
+        
+        // Send input to the backend process
+        fetch("/provide_input", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                user_input: userInput,
+                process_id: currentProcessId
+            })
+        }).then(response => response.json())
+          .then(data => {
+              if (data.status === "success") {
+                  console.log("✅ Input sent successfully");
+                  staticInput.value = ""; // Clear input field
+                  staticInput.focus();
+              } else {
+                  output.textContent += `❌ ${data.message}\n`;
+              }
+          })
+          .catch(error => {
+              output.textContent += `❌ Error sending input: ${error.message}\n`;
+          });
+    }
+
+    // Handle real-time code output
+    socket.on("code_output", (data) => {
+        if (data.process_id === currentProcessId) {
+            const output = document.getElementById("output");
+            output.textContent += data.output;
+            output.scrollTop = output.scrollHeight;
+        }
+    });
+
+    // Handle code completion
+    socket.on("code_complete", (data) => {
+        if (data.process_id === currentProcessId) {
+            const output = document.getElementById("output");
+            output.textContent += "\n✅ Program execution completed\n";
+            output.scrollTop = output.scrollHeight;
+            
+            resetExecutionState();
+        }
+    });
+
+    function resetExecutionState() {
+        const runBtn = document.getElementById("runBtn");
+        runBtn.disabled = false;
+        runBtn.textContent = "▶ Run Code";
+        runBtn.classList.remove("warning");
+        
+        // Disable input controls
+        staticInput.disabled = true;
+        sendInputBtn.disabled = true;
+        staticInput.value = "";
+        staticInput.placeholder = "Run code to enable input...";
+        
+        currentProcessId = null;
+    const statusRun = document.getElementById('statusRun');
+    statusRun.textContent = 'Idle';
+    }
+
+    document.getElementById("clearBtn").onclick = () => {
+        document.getElementById("output").textContent = "";
+        resetExecutionState();
+    };
+    // Download current file
+    document.getElementById("downloadBtn").onclick = () => {
+      try {
+        const name = (activeFile || 'code.txt').toString();
+        const safeName = name.replace(/[\\\/:*?"<>|]/g, '_');
+        const text = editor ? editor.getValue() : '';
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = safeName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          a.remove();
+        }, 0);
+      } catch (e) {
+        alert('Failed to download file: ' + (e && e.message ? e.message : e));
+      }
+    };
+    console.log("🚀SCIAM with Chat functionality ready!");
+
+    // Dataset upload + listing
+    document.getElementById("uploadDatasetBtn").addEventListener("click", uploadDataset);
+    document.getElementById("refreshDatasetsBtn").addEventListener("click", refreshDatasets);
+
+    async function uploadDataset() {
+      const fileInput = document.getElementById("datasetFile");
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert("Choose a file to upload");
+        return;
+      }
+      const file = fileInput.files[0];
+      const form = new FormData();
+      form.append("file", file);
+      form.append("session_id", sessionId);
+
+      try {
+        const res = await fetch("/upload_dataset", { method: "POST", body: form });
+        const data = await res.json();
+        if (data.status === "success") {
+          alert("Uploaded: " + data.filename);
+          fileInput.value = "";
+          refreshDatasets();
+        } else {
+          alert("Upload error: " + (data.message || "unknown"));
+        }
+      } catch (err) {
+        alert("Upload failed: " + err.message);
+      }
+    }
+
+    async function refreshDatasets() {
+      try {
+        const res = await fetch(`/list_datasets?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await res.json();
+        const container = document.getElementById("datasetList");
+        container.innerHTML = "";
+        if (data.status === "success" && data.files.length > 0) {
+          data.files.forEach(f => {
+            const div = document.createElement("div");
+            const link = document.createElement("a");
+            link.href = `/datasets/${encodeURIComponent(sessionId)}/${encodeURIComponent(f)}`;
+            link.textContent = f;
+            link.style.color = "#93c5fd";
+            link.style.textDecoration = "none";
+            link.style.marginRight = "8px";
+            link.target = "_blank";
+            div.appendChild(link);
+            container.appendChild(div);
+          });
+        } else {
+          container.innerHTML = '<div style="font-size:12px; color:#9ca3af;">No datasets uploaded</div>';
+        }
+      } catch (err) {
+        console.error("Failed to list datasets", err);
+      }
+    }
+
+    // Refresh dataset list once connected
+    socket.on("connect", () => {
+      setTimeout(refreshDatasets, 600);
+    });
+
+    // Show server-side errors
+    socket.on('error', (data) => {
+      try {
+        if (data && data.msg) {
+          alert(data.msg);
+        }
+      } catch (e) {
+        // ignore
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+      const isTyping = tag === 'input' || tag === 'textarea';
+      // Ctrl+Enter -> Run
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('runBtn').click();
+        return;
+      }
+      // Ctrl+N -> Add file (host/writer)
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'N')) {
+        if (mySid === hostId || mySid === writerId) {
+          e.preventDefault();
+          const fileName = prompt('New file name', 'file.py');
+          if (fileName && fileName.trim()) {
+            socket.emit('add_tab', { session_id: sessionId, file_name: fileName.trim() });
+          }
+        }
+        return;
+      }
+      // F2 -> Rename current tab (host/writer)
+      if (e.key === 'F2') {
+        if (mySid === hostId || mySid === writerId) {
+          e.preventDefault();
+          if (activeFile) {
+            const newName = prompt('Rename file', activeFile);
+            if (newName && newName.trim() && newName !== activeFile) {
+              socket.emit('rename_tab', { session_id: sessionId, old_name: activeFile, new_name: newName.trim() });
+            }
+          }
+        }
+        return;
+      }
+      // Ctrl+W -> Close current tab (host/writer)
+      if (e.ctrlKey && (e.key === 'w' || e.key === 'W')) {
+        if (mySid === hostId || mySid === writerId) {
+          e.preventDefault();
+          if (Object.keys(files).length > 1 && activeFile) {
+            if (confirm(`Delete ${activeFile}?`)) {
+              socket.emit('remove_tab', { session_id: sessionId, file_name: activeFile });
+            }
+          }
+        }
+        return;
+      }
+      // Ctrl+/ -> Focus chat
+      if (e.ctrlKey && e.key === '/') {
+        e.preventDefault();
+        const chatInputEl = document.getElementById('chatInput');
+        if (chatInputEl) chatInputEl.focus();
+        return;
+      }
+    });
+
+    // Context menu helpers
+    function showTabContextMenu(x, y, name, { canRename, canClose }) {
+      hideTabContextMenu();
+      tabContextMenuTarget = name;
+      if (!tabContextMenuEl) {
+        tabContextMenuEl = document.createElement('div');
+        tabContextMenuEl.className = 'context-menu';
+        document.body.appendChild(tabContextMenuEl);
+      }
+      tabContextMenuEl.innerHTML = '';
+      if (canRename) {
+        const itRename = document.createElement('div');
+        itRename.className = 'item'; itRename.textContent = 'Rename';
+        itRename.addEventListener('click', () => {
+          const newName = prompt('Rename file', name);
+          if (newName && newName.trim() && newName !== name) {
+            socket.emit('rename_tab', { session_id: sessionId, old_name: name, new_name: newName.trim() });
+          }
+          hideTabContextMenu();
+        });
+        tabContextMenuEl.appendChild(itRename);
+      }
+      if (canClose) {
+        const itClose = document.createElement('div');
+        itClose.className = 'item'; itClose.textContent = 'Close';
+        itClose.addEventListener('click', () => {
+          if (confirm(`Delete ${name}?`)) {
+            socket.emit('remove_tab', { session_id: sessionId, file_name: name });
+          }
+          hideTabContextMenu();
+        });
+        tabContextMenuEl.appendChild(itClose);
+      }
+      tabContextMenuEl.style.left = x + 'px';
+      tabContextMenuEl.style.top = y + 'px';
+      tabContextMenuEl.style.display = 'block';
+    }
+    function hideTabContextMenu() {
+      if (tabContextMenuEl) tabContextMenuEl.style.display = 'none';
+      tabContextMenuTarget = null;
+    }
+    document.addEventListener('click', hideTabContextMenu);
+    document.addEventListener('contextmenu', (e) => {
+      if (!e.target.closest || !e.target.closest('.file-tab')) {
+        hideTabContextMenu();
+      }
+    });
+
+    // Status bar updater
+    function updateStatusBar(participants) {
+      const statusFile = document.getElementById('statusFile');
+      const statusRole = document.getElementById('statusRole');
+      const statusPeers = document.getElementById('statusPeers');
+      statusFile.textContent = activeFile || '-';
+      statusRole.textContent = mySid === hostId ? 'Host' : (mySid === writerId ? 'Writer' : 'Viewer');
+      const p = participants || {};
+      const count = Object.keys(p).length || document.getElementById('participantCount')?.textContent || 0;
+      statusPeers.textContent = count;
+    }
+  </script>
+</body>
+</html>

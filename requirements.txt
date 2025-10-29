@@ -1,0 +1,10 @@
+flask
+flask-socketio
+eventlet
+gunicorn
+numpy
+scikit-learn
+pandas
+matplotlib
+
+pymysql
